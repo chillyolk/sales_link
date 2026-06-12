@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import './styles.css';
 
 const STORAGE_KEY = 'saleslink-state-v1';
@@ -44,6 +46,7 @@ function App() {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
   const scrollRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const activeConversation = conversations.find((item) => item.id === activeId) ?? conversations[0];
 
@@ -54,6 +57,24 @@ function App() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [activeConversation?.messages, isSending]);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input]);
+
+  function adjustTextareaHeight() {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight);
+    const verticalPadding = textarea.offsetHeight - textarea.clientHeight;
+    const maxHeight = lineHeight * 4 + verticalPadding;
+    const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }
 
   function handleNewConversation() {
     const conversation = createConversation();
@@ -116,11 +137,7 @@ function App() {
     <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">SL</div>
-          <div>
-            <h1>SalesLink</h1>
-            <p>销售数据分析 Agent</p>
-          </div>
+          <h1>销数通Agent-自测版</h1>
         </div>
         <button className="new-chat" onClick={handleNewConversation}>+ 新建会话</button>
         <div className="conversation-list">
@@ -139,24 +156,25 @@ function App() {
 
       <section className="chat-panel">
         <header className="chat-header">
-          <div>
-            <p className="eyebrow">AI Conversation</p>
-            <h2>{activeConversation.title}</h2>
-          </div>
+          <h2>{activeConversation.title}</h2>
           <div className="status-pill">{config.model ? `模型：${config.model}` : '未配置模型'}</div>
         </header>
 
         <div className="message-list" ref={scrollRef}>
           {activeConversation.messages.map((message, index) => (
             <article key={`${message.role}-${index}`} className={`message ${message.role}`}>
-              <div className="avatar">{message.role === 'user' ? '你' : 'AI'}</div>
-              <div className="bubble">{message.content}</div>
+              {message.role === 'assistant' ? (
+                <div className="markdown-content">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                </div>
+              ) : (
+                <div className="bubble">{message.content}</div>
+              )}
             </article>
           ))}
           {isSending && (
             <article className="message assistant">
-              <div className="avatar">AI</div>
-              <div className="bubble typing">正在思考中...</div>
+              <div className="markdown-content typing">正在思考中...</div>
             </article>
           )}
         </div>
@@ -165,11 +183,12 @@ function App() {
 
         <div className="composer">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="输入你的问题，例如：帮我设计本周销售复盘的分析框架"
-            rows={3}
+            rows={1}
           />
           <button onClick={handleSend} disabled={isSending || !input.trim()}>{isSending ? '发送中' : '发送'}</button>
         </div>

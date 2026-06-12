@@ -10,7 +10,7 @@ This file provides guidance to Genius Code (ByteCloud) when working with code in
 - Start production server after build: `npm run start`
 - Preview production bundle: `npm run preview`
 
-There is no test runner configured yet, so there is no single-test command.
+There are no lint, test, or single-test commands configured yet.
 
 ## Architecture
 
@@ -26,10 +26,14 @@ State is held in React component state and persisted to `localStorage` under `sa
 
 The browser posts chat requests to local `/api/chat`. `server.js` receives `apiKey`, `baseURL`, `model`, and `messages`, then forwards to `${baseURL}/chat/completions` with Bearer auth and an OpenAI-compatible payload. This avoids browser CORS failures from direct model API calls while keeping the first version simple.
 
-Styling lives in `src/styles.css` and is intentionally app-specific: fixed three-column desktop layout, glass-style panels, chat bubbles, and model configuration card.
+Styling lives in `src/styles.css` and is intentionally app-specific: fixed three-column desktop layout, GitHub-style panels, user message bubbles, full-width assistant Markdown content, and model configuration card. Assistant messages are rendered with `react-markdown` and `remark-gfm`.
 
 ## Data artifact
 
 `sales_link_ck.xlsx` is an Excel workbook with one sheet, `Sheet1`, containing 109 rows and 12 columns. The first visible columns are `Type`, `Name`, `Key`, and `说明`. The visible rows suggest it describes sales-link dimensions and metrics, for example `attribution_date`, `advertiser_id`, `advertiser_name`, and `customer_id`.
 
 When analyzing the workbook, use Python/openpyxl or another spreadsheet-aware tool because standard text readers cannot read `.xlsx` binary content.
+
+## Repository notes
+
+There is no root README, Cursor rules file, or Copilot instructions file to merge into these instructions.
