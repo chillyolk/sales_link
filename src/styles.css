@@ -35,7 +35,10 @@ button {
   background: #f6f8fa;
 }
 
-.sidebar,
+.sidebar {
+  padding: 0 16px 16px;
+}
+
 .config-panel {
   padding: 16px;
 }
@@ -54,8 +57,8 @@ button {
 .brand {
   display: flex;
   align-items: center;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #d8dee4;
+  gap: 8px;
+  padding: 10px 0;
 }
 
 .brand h1,
@@ -64,10 +67,19 @@ button {
   margin: 0;
 }
 
+.brand-avatar {
+  flex: 0 0 auto;
+  width: 31px;
+  height: 31px;
+}
+
 .brand h1 {
-  font-size: 16px;
+  overflow: hidden;
+  font-size: 22px;
   font-weight: 600;
   line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-header h2 {
@@ -87,19 +99,28 @@ button {
 }
 
 .new-chat {
-  width: 100%;
-  border: 1px solid rgba(27, 31, 36, 0.15);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  border: 0;
   border-radius: 6px;
-  padding: 8px 12px;
-  color: #ffffff;
+  padding: 4px 6px;
+  color: #57606a;
   font-size: 14px;
-  font-weight: 600;
-  background: #2da44e;
-  box-shadow: 0 1px 0 rgba(27, 31, 36, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  font-weight: 500;
+  background: transparent;
 }
 
 .new-chat:hover {
-  background: #2c974b;
+  color: #24292f;
+  background: #f6f8fa;
+}
+
+.new-chat-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
 }
 
 .conversation-list {
@@ -112,8 +133,9 @@ button {
 
 .conversation-item {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -128,22 +150,53 @@ button {
 }
 
 .conversation-item.active {
-  border-color: #d0d7de;
+  border-color: #d8dee4;
   background: #f6f8fa;
-  box-shadow: inset 3px 0 0 #0969da;
+  box-shadow: 0 2px 8px rgba(31, 35, 40, 0.04);
 }
 
-.conversation-item span {
+.conversation-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.conversation-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.conversation-name {
   overflow: hidden;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.conversation-item small {
-  color: #57606a;
-  font-size: 12px;
+.conversation-delete {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: #8c959f;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0;
+}
+
+.conversation-item:hover .conversation-delete,
+.conversation-delete:focus {
+  opacity: 1;
+}
+
+.conversation-delete:hover {
+  color: #cf222e;
+  background: #ffebe9;
 }
 
 .chat-panel {
@@ -171,16 +224,6 @@ button {
   color: #57606a;
   font-size: 12px;
   font-weight: 600;
-}
-
-.status-pill {
-  border: 1px solid #d0d7de;
-  border-radius: 2em;
-  padding: 4px 8px;
-  color: #57606a;
-  font-size: 12px;
-  font-weight: 500;
-  background: #ffffff;
 }
 
 .message-list {
@@ -346,11 +389,12 @@ button {
 
 .composer textarea {
   flex: 1;
-  min-height: 22px;
-  max-height: 88px;
+  min-height: 32px;
+  max-height: 98px;
   resize: none;
   border: 0;
   outline: none;
+  padding: 5px 0;
   color: #24292f;
   font-size: 14px;
   line-height: 22px;

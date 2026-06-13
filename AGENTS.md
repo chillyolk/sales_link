@@ -37,3 +37,5 @@ When analyzing the workbook, use Python/openpyxl or another spreadsheet-aware to
 ## Repository notes
 
 There is no root README, Cursor rules file, or Copilot instructions file to merge into these instructions.
+
+`.mcp.json` configures the `chrome-devtools` MCP server via `npx -y chrome-devtools-mcp@latest`, which can be used for browser-based UI verification when the Genius Code session loads project MCP servers.
