@@ -11,10 +11,20 @@ const DEFAULT_CONFIG = {
   model: '',
 };
 
-const welcomeMessage = {
-  role: 'assistant',
-  content: '你好，我是 SalesLink。你可以向我询问销售数据分析思路、指标口径、经营复盘框架或客户洞察方法。',
-};
+function createMessage(role, content, extra = {}) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    role,
+    content,
+    ...extra,
+  };
+}
+
+const welcomeMessage = createMessage(
+  'assistant',
+  '你好，我是 SalesLink。你可以向我询问销售数据分析思路、指标口径、经营复盘框架或客户洞察方法。',
+  { status: 'done', steps: [] },
+);
 
 function createConversation() {
   const now = Date.now();
@@ -47,11 +57,17 @@ function App() {
   const [error, setError] = useState('');
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
+  const persistTimerRef = useRef(null);
 
   const activeConversation = conversations.find((item) => item.id === activeId) ?? conversations[0];
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ conversations, activeId, config }));
+    window.clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = window.setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ conversations, activeId, config }));
+    }, 500);
+
+    return () => window.clearTimeout(persistTimerRef.current);
   }, [conversations, activeId, config]);
 
   useEffect(() => {
@@ -107,6 +123,16 @@ function App() {
     setConversations((items) => items.map((item) => (item.id === activeConversation.id ? updater(item) : item)));
   }
 
+  function updateConversationMessage(conversationId, messageId, updater) {
+    setConversations((items) => items.map((conversation) => {
+      if (conversation.id !== conversationId) return conversation;
+      return {
+        ...conversation,
+        messages: conversation.messages.map((message) => (message.id === messageId ? updater(message) : message)),
+      };
+    }));
+  }
+
   async function handleSend() {
     const content = input.trim();
     if (!content || isSending) return;
@@ -119,26 +145,72 @@ function App() {
     setInput('');
     setIsSending(true);
 
-    const userMessage = { role: 'user', content };
-    const currentMessages = [...activeConversation.messages, userMessage];
-    updateActiveConversation((conversation) => ({
-      ...conversation,
-      title: conversation.title === '新的会话' ? content.slice(0, 18) : conversation.title,
-      messages: currentMessages,
+    const conversationId = activeConversation.id;
+    const userMessage = createMessage('user', content);
+    const assistantMessage = createMessage('assistant', '', {
+      status: 'streaming',
+      agentPhase: 'thinking',
+      stepsCollapsed: false,
+      steps: [{ id: 'local-thinking', type: 'thought', title: '分析', text: '开始思考', status: 'streaming' }],
+    });
+    const apiMessages = [...activeConversation.messages, userMessage];
+
+    setConversations((items) => items.map((conversation) => {
+      if (conversation.id !== conversationId) return conversation;
+      return {
+        ...conversation,
+        title: conversation.title === '新的会话' ? content.slice(0, 18) : conversation.title,
+        messages: [...conversation.messages, userMessage, assistantMessage],
+      };
     }));
 
     try {
-      const reply = await requestChatCompletion(config, currentMessages);
-      updateActiveConversation((conversation) => ({
-        ...conversation,
-        messages: [...conversation.messages, { role: 'assistant', content: reply }],
-      }));
+      await streamChatCompletion(config, apiMessages, {
+        onStatus: () => updateConversationMessage(conversationId, assistantMessage.id, (message) => ({
+          ...message,
+          agentPhase: 'thinking',
+        })),
+        onStepStart: (step) => updateConversationMessage(conversationId, assistantMessage.id, (message) => ({
+          ...message,
+          steps: startStep(message.steps, step),
+        })),
+        onStepDelta: (id, text) => updateConversationMessage(conversationId, assistantMessage.id, (message) => ({
+          ...message,
+          steps: appendStepDelta(message.steps, id, text),
+        })),
+        onStepEnd: (id, status) => updateConversationMessage(conversationId, assistantMessage.id, (message) => ({
+          ...message,
+          steps: endStep(message.steps, id, status),
+        })),
+        onLegacyStep: (type, text) => updateConversationMessage(conversationId, assistantMessage.id, (message) => ({
+          ...message,
+          steps: appendStepText(message.steps, type, text),
+        })),
+        onAnswerStart: () => updateConversationMessage(conversationId, assistantMessage.id, (message) => ({
+          ...message,
+          agentPhase: 'answering',
+          stepsCollapsed: true,
+        })),
+        onAnswer: (text) => updateConversationMessage(conversationId, assistantMessage.id, (message) => ({
+          ...message,
+          content: `${message.content}${text}`,
+        })),
+        onDone: () => updateConversationMessage(conversationId, assistantMessage.id, (message) => ({
+          ...message,
+          status: 'done',
+          agentPhase: 'done',
+          stepsCollapsed: true,
+        })),
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : '调用大模型失败，请检查配置后重试。';
       setError(message);
-      updateActiveConversation((conversation) => ({
-        ...conversation,
-        messages: [...conversation.messages, { role: 'assistant', content: `抱歉，当前模型调用失败：${message}` }],
+      updateConversationMessage(conversationId, assistantMessage.id, (assistant) => ({
+        ...assistant,
+        status: 'error',
+        agentPhase: 'done',
+        stepsCollapsed: true,
+        content: assistant.content || `抱歉，当前模型调用失败：${message}`,
       }));
     } finally {
       setIsSending(false);
@@ -211,21 +283,36 @@ function App() {
 
         <div className="message-list" ref={scrollRef}>
           {activeConversation.messages.map((message, index) => (
-            <article key={`${message.role}-${index}`} className={`message ${message.role}`}>
+            <article key={message.id ?? `${message.role}-${index}`} className={`message ${message.role}`}>
               {message.role === 'assistant' ? (
-                <div className="markdown-content">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                <div className="assistant-content">
+                  {message.steps?.length > 0 && (
+                    <details key={`${message.id}-${message.stepsCollapsed ? 'collapsed' : 'open'}`} className="agent-steps" open={!message.stepsCollapsed && message.agentPhase === 'thinking'}>
+                      <summary>{message.agentPhase === 'thinking' ? '正在思考' : '已完成思考'}</summary>
+                      <div className="agent-step-list">
+                        {message.steps.map((step, stepIndex) => (
+                          <div key={step.id ?? `${step.type}-${stepIndex}`} className={`agent-step ${step.type} ${step.status ?? ''}`}>
+                            <span className="agent-step-text">{step.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                  {message.status === 'streaming' && !message.content && !message.steps?.length && (
+                    <div className="typing">正在生成回复...</div>
+                  )}
+                  {message.content && (
+                    <div className="markdown-content">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                      {message.status === 'streaming' && <span className="stream-cursor" />}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bubble">{message.content}</div>
               )}
             </article>
           ))}
-          {isSending && (
-            <article className="message assistant">
-              <div className="markdown-content typing">正在思考中...</div>
-            </article>
-          )}
         </div>
 
         {error && <div className="error-banner">{error}</div>}
@@ -272,14 +359,55 @@ function App() {
               placeholder="输入模型 ID"
             />
           </label>
-          <p className="hint">配置保存在当前浏览器本地。前端请求本地 `/api/chat`，再由本地服务按 OpenAI-compatible `/chat/completions` 格式转发。</p>
+          <p className="hint">配置保存在当前浏览器本地。前端请求本地 `/api/chat`，服务端以 SSE 流式转发 OpenAI-compatible `/chat/completions` 响应。</p>
         </div>
       </aside>
     </main>
   );
 }
 
-async function requestChatCompletion(config, messages) {
+function startStep(steps = [], step) {
+  const nextSteps = steps.filter((item) => item.id !== step.id && item.id !== 'local-thinking');
+  return [...nextSteps, { ...step, text: step.text ?? '', status: 'streaming' }];
+}
+
+function appendStepDelta(steps = [], id, text) {
+  return steps.map((step) => (step.id === id ? { ...step, text: `${step.text ?? ''}${text}` } : step));
+}
+
+function endStep(steps = [], id, status = 'done') {
+  return steps.map((step) => (step.id === id ? { ...step, status } : step));
+}
+
+function appendStepText(steps = [], type, text) {
+  const lastStep = steps.at(-1);
+  if (lastStep?.type === type) {
+    return [...steps.slice(0, -1), { ...lastStep, text: `${lastStep.text}${text}` }];
+  }
+  return [...steps, { id: `${type}-${Date.now()}`, type, title: getStepLabel(type), text, status: 'done' }];
+}
+
+function getStepLabel(type) {
+  const labels = {
+    thought: '分析',
+    action: '行动',
+    observation: '观察',
+    reflection: '目标校验',
+  };
+  return labels[type] ?? '过程';
+}
+
+function parseSseBlock(block) {
+  const lines = block.split('\n');
+  const event = lines.find((line) => line.startsWith('event:'))?.slice(6).trim() || 'message';
+  const data = lines.filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n');
+  return {
+    event,
+    data: data ? JSON.parse(data) : {},
+  };
+}
+
+async function streamChatCompletion(config, messages, handlers) {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: {
@@ -293,19 +421,40 @@ async function requestChatCompletion(config, messages) {
     }),
   });
 
-  const text = await response.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = null;
+  if (!response.ok || !response.body) {
+    const text = await response.text();
+    throw new Error(text || `模型接口返回 ${response.status}`);
   }
 
-  if (!response.ok) {
-    throw new Error(data?.error || data?.message || text || `模型接口返回 ${response.status}`);
-  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
 
-  return data?.choices?.[0]?.message?.content?.trim() || '模型没有返回可展示的内容。';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split('\n\n');
+    buffer = blocks.pop() ?? '';
+
+    for (const block of blocks) {
+      if (!block.trim()) continue;
+      const parsed = parseSseBlock(block);
+      if (parsed.event === 'status') handlers.onStatus?.(parsed.data);
+      if (parsed.event === 'step_start') handlers.onStepStart?.(parsed.data);
+      if (parsed.event === 'step_delta') handlers.onStepDelta?.(parsed.data.id, parsed.data.text || '');
+      if (parsed.event === 'step_end') handlers.onStepEnd?.(parsed.data.id, parsed.data.status);
+      if (parsed.event === 'answer_start') handlers.onAnswerStart?.(parsed.data);
+      if (['thought', 'action', 'observation', 'reflection'].includes(parsed.event)) {
+        const stepText = parsed.event === 'action' ? [parsed.data.name, parsed.data.input].filter(Boolean).join('：') : (parsed.data.text || '');
+        handlers.onLegacyStep?.(parsed.event, stepText);
+      }
+      if (parsed.event === 'answer') handlers.onAnswer?.(parsed.data.text || '');
+      if (parsed.event === 'done') handlers.onDone?.(parsed.data);
+      if (parsed.event === 'error') throw new Error(parsed.data.error || '模型调用失败');
+    }
+  }
 }
 
 createRoot(document.getElementById('root')).render(<App />);

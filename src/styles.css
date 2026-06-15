@@ -265,6 +265,74 @@ button {
   background: #0969da;
 }
 
+.assistant-content {
+  width: 100%;
+}
+
+.agent-steps {
+  margin-bottom: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #f6f8fa;
+}
+
+.agent-steps summary {
+  cursor: pointer;
+  padding: 10px 0 6px;
+  color: #57606a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agent-step-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 12px;
+}
+
+.agent-step {
+  position: relative;
+  display: block;
+  padding: 0 0 12px 18px;
+  color: #57606a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.agent-step::before {
+  position: absolute;
+  top: 0.55em;
+  left: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8c959f;
+  content: '';
+}
+
+.agent-step::after {
+  position: absolute;
+  top: calc(0.55em + 8px);
+  bottom: 2px;
+  left: 3px;
+  width: 1px;
+  background: #d0d7de;
+  content: '';
+}
+
+.agent-step:last-child {
+  padding-bottom: 0;
+}
+
+.agent-step:last-child::after {
+  display: none;
+}
+
+.agent-step-text {
+  display: block;
+  white-space: pre-wrap;
+}
+
 .markdown-content {
   width: 100%;
   color: #24292f;
@@ -363,6 +431,22 @@ button {
 
 .typing {
   color: #57606a;
+}
+
+.stream-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.1em;
+  background: currentColor;
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 .error-banner {

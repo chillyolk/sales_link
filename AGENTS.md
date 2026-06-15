@@ -24,7 +24,7 @@ The UI is organized as a three-column shell in `src/main.jsx`:
 
 State is held in React component state and persisted to `localStorage` under `saleslink-state-v1`. Conversation messages, active conversation ID, and model configuration are all browser-local.
 
-The browser posts chat requests to local `/api/chat`. `server.js` receives `apiKey`, `baseURL`, `model`, and `messages`, then forwards to `${baseURL}/chat/completions` with Bearer auth and an OpenAI-compatible payload. This avoids browser CORS failures from direct model API calls while keeping the first version simple.
+The browser posts chat requests to local `/api/chat`. `server.js` validates the request and delegates to the lightweight Agent Orchestrator in `server/reactAgent.js`. The orchestrator uses `server/modelClient.js` for OpenAI-compatible model calls, `server/tools.js` for tool execution, `server/prompts.js` for structured ReAct prompts, and `server/sse.js` for normalized Server-Sent Events. The SSE protocol includes `status`, `step_start`, `step_delta`, `step_end`, `answer_start`, `answer`, `done`, and `error`, allowing the frontend to show dynamic model-generated ReAct steps and stream the final assistant answer incrementally.
 
 Styling lives in `src/styles.css` and is intentionally app-specific: fixed three-column desktop layout, GitHub-style panels, user message bubbles, full-width assistant Markdown content, and model configuration card. Assistant messages are rendered with `react-markdown` and `remark-gfm`.
 

@@ -2,6 +2,8 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
+import { runReactAgent } from './server/reactAgent.js';
+import { prepareSseResponse, sendError } from './server/sse.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -23,29 +25,25 @@ app.post('/api/chat', async (req, res) => {
     return;
   }
 
-  const normalizedBaseURL = baseURL.trim().replace(/\/+$/, '');
+  const controller = new AbortController();
+  req.on('aborted', () => controller.abort());
+
+  prepareSseResponse(res);
 
   try {
-    const upstreamResponse = await fetch(`${normalizedBaseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey.trim()}`,
-      },
-      body: JSON.stringify({
+    await runReactAgent({
+      config: {
+        apiKey: apiKey.trim(),
+        baseURL: baseURL.trim().replace(/\/+$/, ''),
         model: model.trim(),
-        messages: messages.map(({ role, content }) => ({ role, content })),
-        temperature: 0.7,
-      }),
+      },
+      messages,
+      res,
+      signal: controller.signal,
     });
-
-    const text = await upstreamResponse.text();
-    res.status(upstreamResponse.status).type(upstreamResponse.headers.get('content-type') || 'application/json').send(text);
   } catch (error) {
-    res.status(502).json({
-      error: '本地代理请求模型失败，请检查 BaseURL、网络或模型服务状态。',
-      detail: error instanceof Error ? error.message : String(error),
-    });
+    sendError(res, error);
+    res.end();
   }
 });
 
